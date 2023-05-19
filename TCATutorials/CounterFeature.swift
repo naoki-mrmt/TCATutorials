@@ -21,6 +21,7 @@ struct CounterFeature: ReducerProtocol {
         case tappedDecrementButton
         case tappedIncrementButton
         case tappedFactButton
+        case factResponse(String)
     }
 
     // MARK: - reduce
@@ -37,11 +38,14 @@ struct CounterFeature: ReducerProtocol {
         case .tappedFactButton:
             state.fact = nil
             state.isLoading = true
-            guard let url = URL(string: "http://numbersapi.com/\(state.count)") else {
-                return .none
+            return .run { [count = state.count] send in
+                guard let url = URL(string: "http://numbersapi.com/\(count)") else { return }
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let fact = String(decoding: data, as: UTF8.self)
+                await send(.factResponse(fact))
             }
-            let (data, _) = try await URLSession.shared.data(from: url)
-            state.fact = String(decoding: data, as: UTF8.self)
+        case let .factResponse(fact):
+            state.fact = fact
             state.isLoading = false
             return .none
         }
