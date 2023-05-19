@@ -12,12 +12,15 @@ struct CounterFeature: ReducerProtocol {
     // MARK: - State
     struct State {
         var count = 0
+        var fact: String?
+        var isLoading = false
     }
 
     // MARK: - Action
     enum Action {
         case tappedDecrementButton
         case tappedIncrementButton
+        case tappedFactButton
     }
 
     // MARK: - reduce
@@ -25,9 +28,21 @@ struct CounterFeature: ReducerProtocol {
         switch action {
         case .tappedDecrementButton:
             state.count -= 1
+            state.fact = nil
             return .none
         case .tappedIncrementButton:
             state.count += 1
+            state.fact = nil
+            return .none
+        case .tappedFactButton:
+            state.fact = nil
+            state.isLoading = true
+            guard let url = URL(string: "http://numbersapi.com/\(state.count)") else {
+                return .none
+            }
+            let (data, _) = try await URLSession.shared.data(from: url)
+            state.fact = String(decoding: data, as: UTF8.self)
+            state.isLoading = false
             return .none
         }
     }
@@ -69,6 +84,24 @@ struct CounterView: View {
                     .background(.black.opacity(0.1))
                     .cornerRadius(8)
                 } //: HStack
+                Button {
+                    viewStore.send(.tappedFactButton)
+                } label: {
+                    Text("Fact")
+                        .font(.largeTitle)
+                        .padding()
+                } //: Button
+                .background(.black.opacity(0.1))
+                .cornerRadius(8)
+
+                if viewStore.isLoading {
+                    ProgressView()
+                } else if let fact = viewStore.fact {
+                    Text(fact)
+                        .font(.largeTitle)
+                        .multilineTextAlignment(.center)
+                        .padding()
+                }
             } //: VStack
         } //: WithViewStore
     }
