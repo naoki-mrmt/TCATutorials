@@ -12,22 +12,63 @@ struct CounterFeature: ReducerProtocol {
     // MARK: - State
     struct State {
         var count = 0
+        var fact: String?
+        var isLoading = false
+        var isTimerRunning = false
     }
 
     // MARK: - Action
     enum Action {
         case tappedDecrementButton
         case tappedIncrementButton
+        case tappedToggleTimerButton
+        case tappedFactButton
+        case factResponse(String)
+        case timerTick
     }
+
+    enum CancelID { case timer }
 
     // MARK: - reduce
     func reduce(into state: inout State, action: Action) -> ComposableArchitecture.EffectTask<Action> {
         switch action {
         case .tappedDecrementButton:
             state.count -= 1
+            state.fact = nil
             return .none
         case .tappedIncrementButton:
             state.count += 1
+            state.fact = nil
+            return .none
+        case .tappedToggleTimerButton:
+            state.isTimerRunning.toggle()
+            if state.isTimerRunning {
+                return .run { send in
+                    while true {
+                        try await Task.sleep(for: .seconds(1))
+                        await send(.timerTick)
+                    }
+                }
+                .cancellable(id: CancelID.timer)
+            } else {
+                return .cancel(id: CancelID.timer)
+            }
+        case .tappedFactButton:
+            state.fact = nil
+            state.isLoading = true
+            return .run { [count = state.count] send in
+                guard let url = URL(string: "http://numbersapi.com/\(count)") else { return }
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let fact = String(decoding: data, as: UTF8.self)
+                await send(.factResponse(fact))
+            }
+        case let .factResponse(fact):
+            state.fact = fact
+            state.isLoading = false
+            return .none
+        case .timerTick:
+            state.count += 1
+            state.fact = nil
             return .none
         }
     }
@@ -69,6 +110,33 @@ struct CounterView: View {
                     .background(.black.opacity(0.1))
                     .cornerRadius(8)
                 } //: HStack
+                Button {
+                    viewStore.send(.tappedToggleTimerButton)
+                } label: {
+                    Text(viewStore.isTimerRunning ? "Stop timer" : "Start timer")
+                        .font(.largeTitle)
+                        .padding()
+                } //: Button
+                .background(.black.opacity(0.1))
+                .cornerRadius(8)
+                Button {
+                    viewStore.send(.tappedFactButton)
+                } label: {
+                    Text("Fact")
+                        .font(.largeTitle)
+                        .padding()
+                } //: Button
+                .background(.black.opacity(0.1))
+                .cornerRadius(8)
+
+                if viewStore.isLoading {
+                    ProgressView()
+                } else if let fact = viewStore.fact {
+                    Text(fact)
+                        .font(.largeTitle)
+                        .multilineTextAlignment(.center)
+                        .padding()
+                }
             } //: VStack
         } //: WithViewStore
     }
