@@ -12,6 +12,10 @@ import XCTest
 
 @MainActor
 final class CounterFeatureTests: XCTestCase {
+    // MARK: - Properties
+    let clock = TestClock()
+
+    // MARK: - Method
     func testCounter() async {
         let store = TestStore(initialState: CounterFeature.State()) {
             CounterFeature()
@@ -21,6 +25,24 @@ final class CounterFeatureTests: XCTestCase {
         }
         await store.send(.tappedDecrementButton) {
             $0.count = 0
+        }
+    }
+
+    func testTimer() async {
+        let store = TestStore(initialState: CounterFeature.State()) {
+            CounterFeature()
+        } withDependencies: {
+            $0.continuousClock = clock
+        }
+        await store.send(.tappedToggleTimerButton) {
+            $0.isTimerRunning = true
+        }
+        await clock.advance(by: .seconds(1))
+        await store.receive(.timerTick) {
+            $0.count = 1
+        }
+        await store.send(.tappedToggleTimerButton) {
+            $0.isTimerRunning = false
         }
     }
 }
